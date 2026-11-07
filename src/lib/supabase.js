@@ -113,6 +113,26 @@ function mapEntryToDb(e) {
   };
 }
 
+function mapJudgeFromDb(d) {
+  return {
+    id: d.id,
+    name: d.name,
+    token: d.token,
+    active: d.active !== false,
+    createdAt: d.created_at || d.createdAt || new Date().toISOString(),
+  };
+}
+
+function mapJudgeToDb(j) {
+  return {
+    id: j.id,
+    name: j.name,
+    token: j.token,
+    active: j.active !== false,
+    created_at: j.createdAt || j.created_at || new Date().toISOString(),
+  };
+}
+
 function mapScoreFromDb(d) {
   return {
     id: d.id,
@@ -175,7 +195,7 @@ export async function syncLocalDataToSupabase() {
     const localSettings = getLocalData(LOCAL_STORAGE_KEYS.SETTINGS, null);
 
     if (localJudges.length > 0) {
-      await supabase.from('judges').upsert(localJudges);
+      await supabase.from('judges').upsert(localJudges.map(mapJudgeToDb));
     }
     if (localEntries.length > 0) {
       await supabase.from('entries').upsert(localEntries.map(mapEntryToDb));
@@ -247,7 +267,7 @@ export function subscribeJudges(callback) {
   if (supabase) {
     supabase.from('judges').select('*').then(({ data, error }) => {
       if (!error && data) {
-        callback(data);
+        callback(data.map(mapJudgeFromDb));
       } else {
         callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {})));
       }
@@ -259,7 +279,7 @@ export function subscribeJudges(callback) {
       .channel('public:judges')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'judges' }, () => {
         supabase.from('judges').select('*').then(({ data, error }) => {
-          if (!error && data) callback(data);
+          if (!error && data) callback(data.map(mapJudgeFromDb));
         });
       })
       .subscribe();
@@ -465,7 +485,8 @@ export async function saveJudge(judge) {
 
   if (supabase) {
     try {
-      const { error } = await supabase.from('judges').upsert(judge);
+      const dbPayload = mapJudgeToDb(judge);
+      const { error } = await supabase.from('judges').upsert(dbPayload);
       if (error) console.warn('Supabase saveJudge warning:', error.message);
     } catch (e) {
       console.warn('Supabase saveJudge error:', e.message);
