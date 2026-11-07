@@ -94,7 +94,7 @@ export default function HomeLanding({
           </div>
 
           <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-semibold text-red-400 group-hover:text-red-300">
-            <span>Coordinator Login (PIN: 2026)</span>
+            <span>Coordinator Login</span>
             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </div>
         </div>

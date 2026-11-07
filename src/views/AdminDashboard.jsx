@@ -228,13 +228,13 @@ export default function AdminDashboard({
                 setPinInput(e.target.value);
                 setPinError(false);
               }}
-              placeholder="Enter PIN (Default: 2026)"
+              placeholder="Enter Admin PIN"
               className="w-full glass-input p-3 text-center text-lg tracking-widest font-mono placeholder:text-[#737373]"
               autoFocus
             />
             {pinError && (
               <p className="text-xs text-red-400 mt-1.5 font-medium">
-                Incorrect PIN. Default is 2026.
+                Incorrect PIN. Please enter the authorized coordinator PIN.
               </p>
             )}
           </div>
