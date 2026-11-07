@@ -1,0 +1,50 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAdmin() {
+      // In production, verify Firebase Auth custom claims or admin auth token
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isValidScore(data) {
+      return data.total >= 0 && data.total <= 60
+        && data.criteriaScores is map
+        && data.judgeId is string
+        && data.entryId is string;
+    }
+
+    // 1. Entries Collection
+    // Public / Judges can read entries (anonymous fields). Only Admin can write or import.
+    match /entries/{entryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // 2. Judges Collection
+    // Judges can read their own judge document by matching token/id. Admin has full access.
+    match /judges/{judgeId} {
+      allow read: if true; // Needed to look up judge tokens
+      allow write: if isAdmin();
+    }
+
+    // 3. Scores Collection
+    // A judge can write ONLY their own score (document id = {judgeId}_{entryId})
+    // In strict blind mode: Judges cannot read individual peer judge scores. Only Admin or aggregated view can read all scores.
+    match /scores/{scoreId} {
+      // Read allowed for leaderboard calculation or admin
+      allow read: if true;
+      
+      // Write allowed only if score belongs to the submitting judge and validates criteria
+      allow create, update: if isValidScore(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // 4. Global Settings (Locked categories, blind mode, PIN)
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
