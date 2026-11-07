@@ -18,6 +18,7 @@ export default function EntryReviewModal({
 }) {
   const [entries, setEntries] = useState(parsedEntries);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'flagged', 'duplicates', 'valid'
+  const [startFromOne, setStartFromOne] = useState(true);
 
   const validEntries = entries.filter((e) => !e.isFlagged && !e.isDuplicate && !e.isExcluded);
   const flaggedEntries = entries.filter((e) => e.isFlagged && !e.isDuplicate);
@@ -246,8 +247,16 @@ export default function EntryReviewModal({
 
         {/* Footer Actions */}
         <div className="p-4 md:p-6 border-t border-white/10 bg-black/60 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="text-xs text-[#a3a3a3] text-center sm:text-left">
-            Confirming will automatically assign anonymous IDs (S-01, D-01, T-01) and publish them to the judging portal.
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-2 cursor-pointer select-none text-xs text-[#fafafa] bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 hover:bg-white/10 transition-colors">
+              <input
+                type="checkbox"
+                checked={startFromOne}
+                onChange={(e) => setStartFromOne(e.target.checked)}
+                className="w-4 h-4 accent-red-600 rounded cursor-pointer"
+              />
+              <span className="font-medium">Start numbering from 01 (S-01, D-01, T-01)</span>
+            </label>
           </div>
 
           <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -261,7 +270,7 @@ export default function EntryReviewModal({
 
             <button
               type="button"
-              onClick={() => onConfirm(entries.filter((e) => !e.isExcluded))}
+              onClick={() => onConfirm(entries.filter((e) => !e.isExcluded), startFromOne)}
               disabled={activeCount === 0}
               className="flex-1 sm:flex-none px-6 py-2.5 rounded-xl text-sm font-semibold bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:pointer-events-none text-white shadow-[0_0_20px_rgba(220,38,38,0.4)] transition-all min-h-[44px] flex items-center justify-center gap-2"
             >

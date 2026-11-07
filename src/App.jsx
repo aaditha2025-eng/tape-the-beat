@@ -11,8 +11,10 @@ import {
   subscribeSettings,
   saveEntriesBatch,
   saveJudge,
-  saveScore
+  saveScore,
+  replaceAllEntries
 } from './lib/firebase';
+import { renumberEntriesList } from './utils/importer';
 import { DEMO_ENTRIES, DEMO_JUDGES, DEMO_SCORES } from './utils/demoData';
 
 export default function App() {
@@ -117,6 +119,34 @@ export default function App() {
       autoSeed();
     }
   }, [initialLoaded, entries.length, judges.length]);
+
+  // Automatically ensure database numbering starts strictly from 01 (S-01, D-01, T-01)
+  useEffect(() => {
+    if (!initialLoaded || entries.length === 0) return;
+
+    const categories = ['SOLO', 'DUO', 'TRIO'];
+    let needsFix = false;
+
+    for (const cat of categories) {
+      const catEntries = entries.filter((e) => (e.category || 'SOLO').toUpperCase() === cat && !e.isExcluded);
+      if (catEntries.length > 0) {
+        const nums = catEntries
+          .map((e) => parseInt((e.anonymousId || '').replace(/^[SDT]-/, ''), 10))
+          .filter((n) => !isNaN(n))
+          .sort((a, b) => a - b);
+
+        if (nums.length > 0 && nums[0] !== 1) {
+          needsFix = true;
+          break;
+        }
+      }
+    }
+
+    if (needsFix) {
+      const { renumbered, idMap } = renumberEntriesList(entries);
+      replaceAllEntries(renumbered, idMap);
+    }
+  }, [initialLoaded, entries]);
 
   // Find active judge by token
   const activeJudge = judges.find((j) => j.token === currentJudgeToken);

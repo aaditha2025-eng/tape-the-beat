@@ -1,12 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { 
   Flame, 
   Shield, 
   UserCheck, 
   ChevronRight, 
-  Sparkles, 
-  ArrowRight,
-  ExternalLink
+  Sparkles 
 } from 'lucide-react';
 
 export default function HomeLanding({
@@ -14,15 +12,6 @@ export default function HomeLanding({
   onSelectJudgeToken,
   onNavigate,
 }) {
-  const [tokenInput, setTokenInput] = useState('');
-
-  const handleTokenSubmit = (e) => {
-    e.preventDefault();
-    if (tokenInput.trim()) {
-      onSelectJudgeToken(tokenInput.trim());
-    }
-  };
-
   return (
     <div className="max-w-4xl mx-auto my-6 md:my-12 space-y-10 animate-in fade-in duration-300">
       {/* Hero Header */}
@@ -41,9 +30,9 @@ export default function HomeLanding({
         </p>
       </div>
 
-      {/* Main Role Cards (Judge Portal & Admin Dashboard only) */}
+      {/* Main Role Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
-        {/* Card 1: Judges */}
+        {/* Card 1: Judges (Direct preview links, no token input) */}
         <div className="p-6 md:p-8 rounded-2xl glass-card border border-white/10 hover:border-red-500/40 flex flex-col justify-between group transition-all">
           <div>
             <div className="w-12 h-12 rounded-xl bg-red-950/50 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 group-hover:scale-105 transition-transform">
@@ -53,30 +42,43 @@ export default function HomeLanding({
               JUDGE PORTAL
             </h3>
             <p className="text-xs text-[#a3a3a3] mt-2 mb-4 leading-relaxed">
-              Score participants on your phone or laptop using your private judge token or direct link.
+              Select your judge profile below to start scoring entries:
             </p>
+
+            {/* Quick direct preview links for all registered judges */}
+            <div className="space-y-2 mt-4">
+              {judges.length === 0 ? (
+                <div className="p-4 rounded-xl bg-black/40 border border-white/5 text-xs text-[#a3a3a3] text-center">
+                  No judges registered yet. Add judges in the Admin Dashboard.
+                </div>
+              ) : (
+                judges.map((j) => (
+                  <button
+                    key={j.id}
+                    type="button"
+                    onClick={() => onSelectJudgeToken(j.token)}
+                    className="w-full p-3 rounded-xl bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 border border-white/10 text-xs font-semibold text-white transition-all flex items-center justify-between min-h-[44px] group/item"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-red-500 group-hover/item:scale-125 transition-transform"></span>
+                      <span className="text-sm font-medium">{j.name}</span>
+                    </div>
+                    <span className="text-[11px] text-red-400 flex items-center gap-1 font-semibold">
+                      <span>Enter</span>
+                      <ChevronRight className="w-3.5 h-3.5 group-hover/item:translate-x-1 transition-transform" />
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
           </div>
 
-          <form onSubmit={handleTokenSubmit} className="space-y-2 mt-4">
-            <input
-              type="text"
-              value={tokenInput}
-              onChange={(e) => setTokenInput(e.target.value)}
-              placeholder="Paste Judge Token"
-              className="w-full glass-input p-3 text-xs font-mono"
-            />
-            <button
-              type="submit"
-              disabled={!tokenInput.trim()}
-              className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:pointer-events-none text-white text-xs font-semibold shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all min-h-[44px] flex items-center justify-center gap-1.5"
-            >
-              <span>Enter Judge Portal</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </form>
+          <div className="mt-6 pt-3 border-t border-white/10 text-[11px] text-[#737373]">
+            Direct evaluation access &bull; Blind scoring mode
+          </div>
         </div>
 
-        {/* Card 2: Admin Dashboard (Contains Exclusive Live Leaderboard) */}
+        {/* Card 2: Admin Dashboard */}
         <div 
           onClick={() => onNavigate('admin')}
           className="p-6 md:p-8 rounded-2xl glass-card-interactive border border-white/10 hover:border-red-500/40 flex flex-col justify-between cursor-pointer group"
@@ -99,36 +101,6 @@ export default function HomeLanding({
           </div>
         </div>
       </div>
-
-      {/* Quick Judge Demo Selector */}
-      {judges.length > 0 && (
-        <div className="p-6 rounded-2xl glass-card border-white/10 bg-white/[0.02]">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-4 h-4 text-red-400" />
-            <h4 className="text-sm font-bold font-display tracking-wider text-white uppercase">
-              Quick Judge Preview Links
-            </h4>
-          </div>
-          <p className="text-xs text-[#a3a3a3] mb-4">
-            Click below to instantly experience the competition as any of the registered judges:
-          </p>
-
-          <div className="flex flex-wrap gap-2.5">
-            {judges.map((j) => (
-              <button
-                key={j.id}
-                type="button"
-                onClick={() => onSelectJudgeToken(j.token)}
-                className="px-4 py-2 rounded-xl bg-white/5 hover:bg-red-600/20 hover:border-red-500/40 border border-white/10 text-xs font-semibold text-white transition-all flex items-center gap-2 min-h-[40px]"
-              >
-                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                <span>Enter as {j.name}</span>
-                <ArrowRight className="w-3.5 h-3.5 text-[#a3a3a3]" />
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

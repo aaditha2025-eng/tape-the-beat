@@ -30,9 +30,10 @@ import {
   deleteEntry, 
   updateSettings,
   clearAllCompetitionData,
-  saveScore
+  saveScore,
+  replaceAllEntries
 } from '../lib/firebase';
-import { parseGoogleFormExcel, assignAnonymousIds } from '../utils/importer';
+import { parseGoogleFormExcel, assignAnonymousIds, renumberEntriesList } from '../utils/importer';
 import { DEMO_ENTRIES, DEMO_JUDGES, DEMO_SCORES } from '../utils/demoData';
 import EntryReviewModal from '../components/EntryReviewModal';
 import Leaderboard from './Leaderboard';
@@ -97,15 +98,37 @@ export default function AdminDashboard({
   };
 
   // Confirm Import after review modal
-  const handleConfirmImport = async (reviewedEntries) => {
+  const handleConfirmImport = async (reviewedEntries, startFromOne = false) => {
     try {
-      const assigned = assignAnonymousIds(reviewedEntries, entries);
-      await saveEntriesBatch(assigned);
+      const assigned = assignAnonymousIds(reviewedEntries, entries, startFromOne);
+      if (startFromOne) {
+        await replaceAllEntries(assigned);
+      } else {
+        await saveEntriesBatch(assigned);
+      }
       setParsedImportRows(null);
       alert(`Successfully imported ${assigned.length} dance entries!`);
     } catch (err) {
       console.error('Error saving imported entries:', err);
       alert('Error saving entries to database.');
+    }
+  };
+
+  // Renumber Current Database entries from 01 (S-01, D-01, T-01)
+  const handleRenumberDatabase = async () => {
+    if (entries.length === 0) {
+      alert('No entries in database to renumber.');
+      return;
+    }
+    if (window.confirm('Renumber all current entries so Solo, Duo, and Trio start strictly from 01 (S-01, D-01, T-01)? Existing scores will be safely preserved.')) {
+      try {
+        const { renumbered, idMap } = renumberEntriesList(entries);
+        await replaceAllEntries(renumbered, idMap);
+        alert('All entries have been renumbered starting from 01!');
+      } catch (e) {
+        console.error('Renumbering error:', e);
+        alert('Failed to renumber entries.');
+      }
     }
   };
 
@@ -389,20 +412,32 @@ export default function AdminDashboard({
               />
             </div>
 
-            <div className="flex items-center gap-1.5 self-start sm:self-auto">
-              {['ALL', 'SOLO', 'DUO', 'TRIO'].map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setCategoryFilter(cat)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all min-h-[38px] ${
-                    categoryFilter === cat
-                      ? 'bg-red-600 text-white'
-                      : 'bg-white/5 hover:bg-white/10 text-[#a3a3a3]'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="flex items-center gap-2 self-start sm:self-auto flex-wrap">
+              <button
+                type="button"
+                onClick={handleRenumberDatabase}
+                title="Re-sequence all entries starting strictly from S-01, D-01, T-01"
+                className="px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-red-300 border border-red-500/30 transition-all min-h-[38px] flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-red-400" />
+                <span>Renumber from 01</span>
+              </button>
+
+              <div className="flex items-center gap-1">
+                {['ALL', 'SOLO', 'DUO', 'TRIO'].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setCategoryFilter(cat)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all min-h-[38px] ${
+                      categoryFilter === cat
+                        ? 'bg-red-600 text-white'
+                        : 'bg-white/5 hover:bg-white/10 text-[#a3a3a3]'
+                    }`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

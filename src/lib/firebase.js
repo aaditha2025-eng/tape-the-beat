@@ -275,6 +275,44 @@ export async function saveEntriesBatch(entriesList) {
 }
 
 /**
+ * Replace all entries and remap existing scores if IDs changed
+ */
+export async function replaceAllEntries(renumberedEntries, idMap = new Map()) {
+  const newLocalEntries = {};
+  renumberedEntries.forEach((e) => {
+    newLocalEntries[e.id] = {
+      ...e,
+      createdAt: e.createdAt || new Date().toISOString(),
+    };
+  });
+  setLocalData(LOCAL_STORAGE_KEYS.ENTRIES, newLocalEntries);
+
+  // Remap existing scores if entry IDs changed
+  if (idMap.size > 0) {
+    const localScores = getLocalData(LOCAL_STORAGE_KEYS.SCORES, {});
+    const updatedScores = {};
+    Object.values(localScores).forEach((score) => {
+      const newEntryId = idMap.get(score.entryId) || score.entryId;
+      const newScoreId = `${score.judgeId}_${newEntryId}`;
+      updatedScores[newScoreId] = {
+        ...score,
+        entryId: newEntryId,
+      };
+    });
+    setLocalData(LOCAL_STORAGE_KEYS.SCORES, updatedScores);
+  }
+
+  if (firestoreDb) {
+    const batch = writeBatch(firestoreDb);
+    renumberedEntries.forEach((entry) => {
+      const docRef = doc(firestoreDb, 'entries', entry.id);
+      batch.set(docRef, entry);
+    });
+    await batch.commit();
+  }
+}
+
+/**
  * Delete Entry
  */
 export async function deleteEntry(entryId) {

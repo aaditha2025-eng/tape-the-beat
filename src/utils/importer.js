@@ -215,24 +215,29 @@ export async function parseGoogleFormExcel(fileBuffer) {
 
 /**
  * Assign anonymous IDs (S-01, D-01, T-01) to active confirmed entries
+ * @param {Array} entries - New entries to assign
+ * @param {Array} existingEntries - Already registered entries
+ * @param {boolean} startFromOne - If true, ignores existing and starts sequence from 01
  */
-export function assignAnonymousIds(entries, existingEntries = []) {
+export function assignAnonymousIds(entries, existingEntries = [], startFromOne = false) {
   const categoryPrefixes = {
     SOLO: 'S',
     DUO: 'D',
     TRIO: 'T',
   };
 
-  // Find max existing number per category
+  // Find max existing number per category unless starting fresh from 01
   const counters = { SOLO: 0, DUO: 0, TRIO: 0 };
-  existingEntries.forEach((e) => {
-    const cat = e.category || 'SOLO';
-    const match = (e.anonymousId || '').match(/^[SDT]-(\d+)$/);
-    if (match) {
-      const num = parseInt(match[1], 10);
-      if (num > (counters[cat] || 0)) counters[cat] = num;
-    }
-  });
+  if (!startFromOne && existingEntries.length > 0) {
+    existingEntries.forEach((e) => {
+      const cat = e.category || 'SOLO';
+      const match = (e.anonymousId || '').match(/^[SDT]-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > (counters[cat] || 0)) counters[cat] = num;
+      }
+    });
+  }
 
   const processed = entries.map((entry) => {
     if (entry.isExcluded) return entry;
@@ -252,4 +257,52 @@ export function assignAnonymousIds(entries, existingEntries = []) {
   });
 
   return processed;
+}
+
+/**
+ * Renumber an existing list of entries sequentially starting strictly from 01 (S-01, D-01, T-01)
+ */
+export function renumberEntriesList(entriesList) {
+  const categoryPrefixes = {
+    SOLO: 'S',
+    DUO: 'D',
+    TRIO: 'T',
+  };
+
+  const counters = { SOLO: 0, DUO: 0, TRIO: 0 };
+
+  // Sort entries: by category, then by existing anonymousId or createdAt
+  const sorted = [...entriesList].sort((a, b) => {
+    const catA = (a.category || 'SOLO').toUpperCase();
+    const catB = (b.category || 'SOLO').toUpperCase();
+    if (catA !== catB) return catA.localeCompare(catB);
+
+    const numA = parseInt((a.anonymousId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+    const numB = parseInt((b.anonymousId || '0').replace(/[^0-9]/g, ''), 10) || 0;
+    if (numA !== numB) return numA - numB;
+
+    return (a.createdAt || '').localeCompare(b.createdAt || '');
+  });
+
+  const idMap = new Map(); // oldId -> newId
+
+  const renumbered = sorted.map((entry) => {
+    const cat = (entry.category || 'SOLO').toUpperCase();
+    counters[cat] = (counters[cat] || 0) + 1;
+    const prefix = categoryPrefixes[cat] || 'S';
+    const numStr = String(counters[cat]).padStart(2, '0');
+    const newId = `${prefix}-${numStr}`;
+
+    idMap.set(entry.id, newId);
+    idMap.set(entry.anonymousId, newId);
+
+    return {
+      ...entry,
+      id: newId,
+      anonymousId: newId,
+      oldId: entry.id,
+    };
+  });
+
+  return { renumbered, idMap };
 }
