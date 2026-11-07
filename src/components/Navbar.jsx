@@ -45,20 +45,6 @@ export default function Navbar({
             </div>
           )}
 
-          {/* Leaderboard Link */}
-          <button
-            type="button"
-            onClick={() => onNavigate('leaderboard')}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs md:text-sm font-semibold transition-all min-h-[40px] ${
-              currentView === 'leaderboard'
-                ? 'bg-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.4)]'
-                : 'bg-white/5 hover:bg-white/10 text-[#fafafa]'
-            }`}
-          >
-            <Trophy className="w-4 h-4 text-amber-400" />
-            <span className="hidden xs:inline">Leaderboard</span>
-          </button>
-
           {/* Admin Dashboard */}
           <button
             type="button"
@@ -70,7 +56,7 @@ export default function Navbar({
             }`}
           >
             <Shield className="w-4 h-4 text-red-400" />
-            <span className="hidden xs:inline">Admin</span>
+            <span>Admin</span>
           </button>
         </nav>
 

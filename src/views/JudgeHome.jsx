@@ -17,7 +17,6 @@ export default function JudgeHome({
   scores = [],
   settings = {},
   onSelectEntry,
-  onOpenLeaderboard,
 }) {
   const [selectedCategory, setSelectedCategory] = useState('SOLO');
 

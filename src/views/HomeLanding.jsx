@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { 
   Flame, 
-  Trophy, 
   Shield, 
   UserCheck, 
   ChevronRight, 
@@ -42,10 +41,10 @@ export default function HomeLanding({
         </p>
       </div>
 
-      {/* Main Role Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+      {/* Main Role Cards (Judge Portal & Admin Dashboard only) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto">
         {/* Card 1: Judges */}
-        <div className="p-6 rounded-2xl glass-card border border-white/10 hover:border-red-500/40 flex flex-col justify-between group transition-all">
+        <div className="p-6 md:p-8 rounded-2xl glass-card border border-white/10 hover:border-red-500/40 flex flex-col justify-between group transition-all">
           <div>
             <div className="w-12 h-12 rounded-xl bg-red-950/50 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 group-hover:scale-105 transition-transform">
               <UserCheck className="w-6 h-6" />
@@ -54,56 +53,33 @@ export default function HomeLanding({
               JUDGE PORTAL
             </h3>
             <p className="text-xs text-[#a3a3a3] mt-2 mb-4 leading-relaxed">
-              Score participants on your own phone or laptop using your private link or access token.
+              Score participants on your phone or laptop using your private judge token or direct link.
             </p>
           </div>
 
-          <form onSubmit={handleTokenSubmit} className="space-y-2 mt-2">
+          <form onSubmit={handleTokenSubmit} className="space-y-2 mt-4">
             <input
               type="text"
               value={tokenInput}
               onChange={(e) => setTokenInput(e.target.value)}
               placeholder="Paste Judge Token"
-              className="w-full glass-input p-2.5 text-xs font-mono"
+              className="w-full glass-input p-3 text-xs font-mono"
             />
             <button
               type="submit"
               disabled={!tokenInput.trim()}
-              className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:pointer-events-none text-white text-xs font-semibold shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all min-h-[40px] flex items-center justify-center gap-1.5"
+              className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-30 disabled:pointer-events-none text-white text-xs font-semibold shadow-[0_0_15px_rgba(220,38,38,0.4)] transition-all min-h-[44px] flex items-center justify-center gap-1.5"
             >
-              <span>Enter Portal</span>
+              <span>Enter Judge Portal</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </form>
         </div>
 
-        {/* Card 2: Leaderboard */}
-        <div 
-          onClick={() => onNavigate('leaderboard')}
-          className="p-6 rounded-2xl glass-card-interactive border border-white/10 hover:border-amber-500/40 flex flex-col justify-between cursor-pointer group"
-        >
-          <div>
-            <div className="w-12 h-12 rounded-xl bg-amber-950/40 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-4 group-hover:scale-105 transition-transform">
-              <Trophy className="w-6 h-6" />
-            </div>
-            <h3 className="text-2xl font-bold font-display tracking-wide text-white">
-              LIVE LEADERBOARD
-            </h3>
-            <p className="text-xs text-[#a3a3a3] mt-2 leading-relaxed">
-              View live rankings for Solo, Duo, and Trio categories with podium highlights and tie-break transparency.
-            </p>
-          </div>
-
-          <div className="mt-6 pt-3 border-t border-white/10 flex items-center justify-between text-xs font-semibold text-amber-400 group-hover:text-amber-300">
-            <span>View Current Standings</span>
-            <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </div>
-        </div>
-
-        {/* Card 3: Admin */}
+        {/* Card 2: Admin Dashboard (Contains Exclusive Live Leaderboard) */}
         <div 
           onClick={() => onNavigate('admin')}
-          className="p-6 rounded-2xl glass-card-interactive border border-white/10 hover:border-red-500/40 flex flex-col justify-between cursor-pointer group"
+          className="p-6 md:p-8 rounded-2xl glass-card-interactive border border-white/10 hover:border-red-500/40 flex flex-col justify-between cursor-pointer group"
         >
           <div>
             <div className="w-12 h-12 rounded-xl bg-red-950/40 border border-red-500/30 flex items-center justify-center text-red-400 mb-4 group-hover:scale-105 transition-transform">
@@ -113,11 +89,11 @@ export default function HomeLanding({
               ADMIN DASHBOARD
             </h3>
             <p className="text-xs text-[#a3a3a3] mt-2 leading-relaxed">
-              Import Google Form spreadsheets, generate judge links, freeze rounds, and export final Excel reports.
+              Access the live competition leaderboard, import spreadsheets, manage private judge links, freeze rounds, and export final Excel reports.
             </p>
           </div>
 
-          <div className="mt-6 pt-3 border-t border-white/10 flex items-center justify-between text-xs font-semibold text-red-400 group-hover:text-red-300">
+          <div className="mt-8 pt-4 border-t border-white/10 flex items-center justify-between text-xs font-semibold text-red-400 group-hover:text-red-300">
             <span>Coordinator Login (PIN: 2026)</span>
             <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </div>

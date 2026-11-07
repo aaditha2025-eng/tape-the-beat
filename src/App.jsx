@@ -3,7 +3,6 @@ import Navbar from './components/Navbar';
 import HomeLanding from './views/HomeLanding';
 import JudgeHome from './views/JudgeHome';
 import JudgeScore from './views/JudgeScore';
-import Leaderboard from './views/Leaderboard';
 import AdminDashboard from './views/AdminDashboard';
 import { 
   subscribeEntries, 
@@ -197,7 +196,6 @@ export default function App() {
                 scores={scores}
                 settings={settings}
                 onSelectEntry={handleSelectEntry}
-                onOpenLeaderboard={() => setCurrentView('leaderboard')}
               />
             )}
 
@@ -215,18 +213,8 @@ export default function App() {
               />
             )}
 
-            {/* 4. Live Public Leaderboard & Audit */}
-            {currentView === 'leaderboard' && (
-              <Leaderboard
-                entries={entries}
-                judges={judges}
-                scores={scores}
-                settings={settings}
-              />
-            )}
-
-            {/* 5. Admin Dashboard (PIN-Protected) */}
-            {currentView === 'admin' && (
+            {/* 4. Admin Dashboard (PIN-Protected, includes Live Leaderboard & Audit) */}
+            {(currentView === 'admin' || currentView === 'leaderboard') && (
               <AdminDashboard
                 entries={entries}
                 judges={judges}
