@@ -150,28 +150,97 @@ function mapSettingsFromDb(d) {
 // UNIFIED REAL-TIME SUBSCRIBERS
 // ==========================================
 
+export async function checkSupabaseHealth() {
+  if (!supabase) return { connected: false, message: 'Supabase credentials not configured' };
+  try {
+    const { data, error } = await supabase.from('judges').select('id').limit(1);
+    if (error) {
+      if (error.code === 'PGRST205' || error.message?.includes('not find the table') || error.message?.includes('schema cache')) {
+        return { connected: false, tablesMissing: true, message: "Tables missing in Supabase schema cache. Please run supabase-schema.sql in Supabase SQL Editor." };
+      }
+      return { connected: false, tablesMissing: false, message: error.message };
+    }
+    return { connected: true, tablesMissing: false, message: 'Connected and synchronized with Supabase cloud database.' };
+  } catch (err) {
+    return { connected: false, error: err.message };
+  }
+}
+
+export async function syncLocalDataToSupabase() {
+  if (!supabase) return { success: false, message: 'No Supabase connection' };
+  try {
+    const localEntries = Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {}));
+    const localJudges = Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {}));
+    const localScores = Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {}));
+    const localSettings = getLocalData(LOCAL_STORAGE_KEYS.SETTINGS, null);
+
+    if (localJudges.length > 0) {
+      await supabase.from('judges').upsert(localJudges);
+    }
+    if (localEntries.length > 0) {
+      await supabase.from('entries').upsert(localEntries.map(mapEntryToDb));
+    }
+    if (localScores.length > 0) {
+      await supabase.from('scores').upsert(localScores.map(mapScoreToDb));
+    }
+    if (localSettings) {
+      await supabase.from('settings').upsert({
+        id: 'global',
+        locked_categories: localSettings.lockedCategories,
+        names_visible: localSettings.namesVisible,
+        admin_pin: localSettings.adminPin,
+        active_round_name: localSettings.activeRoundName,
+      });
+    }
+
+    return { 
+      success: true, 
+      counts: { 
+        judges: localJudges.length, 
+        entries: localEntries.length, 
+        scores: localScores.length 
+      } 
+    };
+  } catch (err) {
+    console.error('syncLocalDataToSupabase error:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 export function subscribeEntries(callback) {
+  // Always register local callback for instant optimistic UI updates
+  listeners.entries.add(callback);
+
   if (supabase) {
-    // Initial fetch
+    // Initial fetch from Supabase
     supabase.from('entries').select('*').then(({ data, error }) => {
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         callback(data.map(mapEntryFromDb));
       } else {
-        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {})));
+        // Fall back to local data if table missing or empty while local has items
+        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {}));
+        callback(local);
+        // If local has items and Supabase table exists, sync up
+        if (!error && local.length > 0 && (!data || data.length === 0)) {
+          supabase.from('entries').upsert(local.map(mapEntryToDb)).catch(console.error);
+        }
       }
+    }).catch(() => {
+      callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {})));
     });
 
     // Realtime channel
     const channel = supabase
       .channel('public:entries')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'entries' }, () => {
-        supabase.from('entries').select('*').then(({ data }) => {
-          if (data) callback(data.map(mapEntryFromDb));
+        supabase.from('entries').select('*').then(({ data, error }) => {
+          if (!error && data) callback(data.map(mapEntryFromDb));
         });
       })
       .subscribe();
 
     return () => {
+      listeners.entries.delete(callback);
       supabase.removeChannel(channel);
     };
   }
@@ -179,67 +248,84 @@ export function subscribeEntries(callback) {
   // Local fallback
   const current = Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {}));
   callback(current);
-  listeners.entries.add(callback);
   return () => listeners.entries.delete(callback);
 }
 
 export function subscribeJudges(callback) {
+  // Always register local callback for instant optimistic UI updates
+  listeners.judges.add(callback);
+
   if (supabase) {
     supabase.from('judges').select('*').then(({ data, error }) => {
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         callback(data);
       } else {
-        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {})));
+        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {}));
+        callback(local);
+        // If local has items and Supabase table exists, auto-sync
+        if (!error && local.length > 0 && (!data || data.length === 0)) {
+          supabase.from('judges').upsert(local).catch(console.error);
+        }
       }
+    }).catch(() => {
+      callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {})));
     });
 
     const channel = supabase
       .channel('public:judges')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'judges' }, () => {
-        supabase.from('judges').select('*').then(({ data }) => {
-          if (data) callback(data);
+        supabase.from('judges').select('*').then(({ data, error }) => {
+          if (!error && data) callback(data);
         });
       })
       .subscribe();
 
     return () => {
+      listeners.judges.delete(callback);
       supabase.removeChannel(channel);
     };
   }
 
   const current = Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {}));
   callback(current);
-  listeners.judges.add(callback);
   return () => listeners.judges.delete(callback);
 }
 
 export function subscribeScores(callback) {
+  listeners.scores.add(callback);
+
   if (supabase) {
     supabase.from('scores').select('*').then(({ data, error }) => {
-      if (!error && data) {
+      if (!error && data && data.length > 0) {
         callback(data.map(mapScoreFromDb));
       } else {
-        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {})));
+        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {}));
+        callback(local);
+        if (!error && local.length > 0 && (!data || data.length === 0)) {
+          supabase.from('scores').upsert(local.map(mapScoreToDb)).catch(console.error);
+        }
       }
+    }).catch(() => {
+      callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {})));
     });
 
     const channel = supabase
       .channel('public:scores')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scores' }, () => {
-        supabase.from('scores').select('*').then(({ data }) => {
-          if (data) callback(data.map(mapScoreFromDb));
+        supabase.from('scores').select('*').then(({ data, error }) => {
+          if (!error && data) callback(data.map(mapScoreFromDb));
         });
       })
       .subscribe();
 
     return () => {
+      listeners.scores.delete(callback);
       supabase.removeChannel(channel);
     };
   }
 
   const current = Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {}));
   callback(current);
-  listeners.scores.add(callback);
   return () => listeners.scores.delete(callback);
 }
 
@@ -251,6 +337,8 @@ export function subscribeSettings(callback) {
     activeRoundName: 'Final Round 2026',
   };
 
+  listeners.settings.add(callback);
+
   if (supabase) {
     supabase.from('settings').select('*').eq('id', 'global').maybeSingle().then(({ data, error }) => {
       if (!error && data) {
@@ -258,25 +346,27 @@ export function subscribeSettings(callback) {
       } else {
         callback(getLocalData(LOCAL_STORAGE_KEYS.SETTINGS, defaultSettings));
       }
+    }).catch(() => {
+      callback(getLocalData(LOCAL_STORAGE_KEYS.SETTINGS, defaultSettings));
     });
 
     const channel = supabase
       .channel('public:settings')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => {
-        supabase.from('settings').select('*').eq('id', 'global').maybeSingle().then(({ data }) => {
-          if (data) callback(mapSettingsFromDb(data));
+        supabase.from('settings').select('*').eq('id', 'global').maybeSingle().then(({ data, error }) => {
+          if (!error && data) callback(mapSettingsFromDb(data));
         });
       })
       .subscribe();
 
     return () => {
+      listeners.settings.delete(callback);
       supabase.removeChannel(channel);
     };
   }
 
   const local = getLocalData(LOCAL_STORAGE_KEYS.SETTINGS, defaultSettings);
   callback(local);
-  listeners.settings.add(callback);
   return () => listeners.settings.delete(callback);
 }
 
@@ -294,15 +384,20 @@ export async function saveScore(judgeId, entryId, scoreData) {
     updatedAt: new Date().toISOString(),
   };
 
-  // Local cache
+  // Local cache & notify
   const localScores = getLocalData(LOCAL_STORAGE_KEYS.SCORES, {});
   localScores[scoreId] = payload;
   setLocalData(LOCAL_STORAGE_KEYS.SCORES, localScores);
+  notifyLocal('scores', Object.values(localScores));
 
   if (supabase) {
-    const dbPayload = mapScoreToDb(payload);
-    const { error } = await supabase.from('scores').upsert(dbPayload);
-    if (error) console.error('Supabase saveScore error:', error);
+    try {
+      const dbPayload = mapScoreToDb(payload);
+      const { error } = await supabase.from('scores').upsert(dbPayload);
+      if (error) console.warn('Supabase saveScore warning:', error.message);
+    } catch (e) {
+      console.warn('Supabase saveScore network/table error:', e.message);
+    }
   }
 
   return payload;
@@ -317,11 +412,16 @@ export async function saveEntriesBatch(entriesList) {
     };
   });
   setLocalData(LOCAL_STORAGE_KEYS.ENTRIES, localEntries);
+  notifyLocal('entries', Object.values(localEntries));
 
   if (supabase) {
-    const dbEntries = entriesList.map(mapEntryToDb);
-    const { error } = await supabase.from('entries').upsert(dbEntries);
-    if (error) console.error('Supabase saveEntriesBatch error:', error);
+    try {
+      const dbEntries = entriesList.map(mapEntryToDb);
+      const { error } = await supabase.from('entries').upsert(dbEntries);
+      if (error) console.warn('Supabase saveEntriesBatch warning:', error.message);
+    } catch (e) {
+      console.warn('Supabase saveEntriesBatch error:', e.message);
+    }
   }
 }
 
@@ -334,6 +434,7 @@ export async function replaceAllEntries(renumberedEntries, idMap = new Map()) {
     };
   });
   setLocalData(LOCAL_STORAGE_KEYS.ENTRIES, newLocal);
+  notifyLocal('entries', Object.values(newLocal));
 
   if (idMap.size > 0) {
     const localScores = getLocalData(LOCAL_STORAGE_KEYS.SCORES, {});
@@ -347,12 +448,17 @@ export async function replaceAllEntries(renumberedEntries, idMap = new Map()) {
       };
     });
     setLocalData(LOCAL_STORAGE_KEYS.SCORES, updated);
+    notifyLocal('scores', Object.values(updated));
   }
 
   if (supabase) {
-    await supabase.from('entries').delete().neq('id', '___none___');
-    const dbEntries = renumberedEntries.map(mapEntryToDb);
-    await supabase.from('entries').upsert(dbEntries);
+    try {
+      await supabase.from('entries').delete().neq('id', '___none___');
+      const dbEntries = renumberedEntries.map(mapEntryToDb);
+      await supabase.from('entries').upsert(dbEntries);
+    } catch (e) {
+      console.warn('Supabase replaceAllEntries error:', e.message);
+    }
   }
 }
 
@@ -360,9 +466,14 @@ export async function deleteEntry(entryId) {
   const localEntries = getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {});
   delete localEntries[entryId];
   setLocalData(LOCAL_STORAGE_KEYS.ENTRIES, localEntries);
+  notifyLocal('entries', Object.values(localEntries));
 
   if (supabase) {
-    await supabase.from('entries').delete().eq('id', entryId);
+    try {
+      await supabase.from('entries').delete().eq('id', entryId);
+    } catch (e) {
+      console.warn('Supabase deleteEntry error:', e.message);
+    }
   }
 }
 
@@ -370,9 +481,15 @@ export async function saveJudge(judge) {
   const localJudges = getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {});
   localJudges[judge.id] = judge;
   setLocalData(LOCAL_STORAGE_KEYS.JUDGES, localJudges);
+  notifyLocal('judges', Object.values(localJudges));
 
   if (supabase) {
-    await supabase.from('judges').upsert(judge);
+    try {
+      const { error } = await supabase.from('judges').upsert(judge);
+      if (error) console.warn('Supabase saveJudge warning:', error.message);
+    } catch (e) {
+      console.warn('Supabase saveJudge error:', e.message);
+    }
   }
 }
 
@@ -380,9 +497,14 @@ export async function deleteJudge(judgeId) {
   const localJudges = getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {});
   delete localJudges[judgeId];
   setLocalData(LOCAL_STORAGE_KEYS.JUDGES, localJudges);
+  notifyLocal('judges', Object.values(localJudges));
 
   if (supabase) {
-    await supabase.from('judges').delete().eq('id', judgeId);
+    try {
+      await supabase.from('judges').delete().eq('id', judgeId);
+    } catch (e) {
+      console.warn('Supabase deleteJudge error:', e.message);
+    }
   }
 }
 
@@ -395,15 +517,20 @@ export async function updateSettings(partialSettings) {
   });
   const updated = { ...current, ...partialSettings };
   setLocalData(LOCAL_STORAGE_KEYS.SETTINGS, updated);
+  notifyLocal('settings', updated);
 
   if (supabase) {
-    await supabase.from('settings').upsert({
-      id: 'global',
-      locked_categories: updated.lockedCategories,
-      names_visible: updated.namesVisible,
-      admin_pin: updated.adminPin,
-      active_round_name: updated.activeRoundName,
-    });
+    try {
+      await supabase.from('settings').upsert({
+        id: 'global',
+        locked_categories: updated.lockedCategories,
+        names_visible: updated.namesVisible,
+        admin_pin: updated.adminPin,
+        active_round_name: updated.activeRoundName,
+      });
+    } catch (e) {
+      console.warn('Supabase updateSettings error:', e.message);
+    }
   }
 }
 
@@ -415,10 +542,17 @@ export async function clearAllCompetitionData() {
   setLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {});
   setLocalData(LOCAL_STORAGE_KEYS.JUDGES, {});
   setLocalData(LOCAL_STORAGE_KEYS.SCORES, {});
+  notifyLocal('entries', []);
+  notifyLocal('judges', []);
+  notifyLocal('scores', []);
 
   if (supabase) {
-    await supabase.from('scores').delete().neq('id', '___none___');
-    await supabase.from('entries').delete().neq('id', '___none___');
-    await supabase.from('judges').delete().neq('id', '___none___');
+    try {
+      await supabase.from('scores').delete().neq('id', '___none___');
+      await supabase.from('entries').delete().neq('id', '___none___');
+      await supabase.from('judges').delete().neq('id', '___none___');
+    } catch (e) {
+      console.warn('Supabase clearAllCompetitionData error:', e.message);
+    }
   }
 }

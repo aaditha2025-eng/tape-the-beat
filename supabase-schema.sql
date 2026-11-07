@@ -1,5 +1,8 @@
--- DanceJudge Pro Database Schema
--- Run this in the Supabase SQL Editor (Dashboard -> SQL Editor -> New Query)
+-- =========================================================================
+-- DANCEJUDGE PRO (TAPE THE BEAT) - SUPABASE DATABASE INITIALIZATION
+-- Run this in Supabase Dashboard -> SQL Editor -> New query -> Click "Run"
+-- Link: https://supabase.com/dashboard/project/lkhgccaokicgyfrsbhlt/sql/new
+-- =========================================================================
 
 -- 1. Entries table
 CREATE TABLE IF NOT EXISTS public.entries (
@@ -32,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.judges (
 
 -- 3. Scores table
 CREATE TABLE IF NOT EXISTS public.scores (
-  id TEXT PRIMARY KEY, -- e.g. '{judge_id}_{entry_id}'
+  id TEXT PRIMARY KEY,
   judge_id TEXT NOT NULL,
   entry_id TEXT NOT NULL,
   total NUMERIC NOT NULL,
@@ -55,26 +58,41 @@ INSERT INTO public.settings (id, locked_categories, names_visible, admin_pin, ac
 VALUES ('global', '{"SOLO": false, "DUO": false, "TRIO": false}', false, '2026', 'Final Round 2026')
 ON CONFLICT (id) DO NOTHING;
 
--- Enable Realtime for all tables
-ALTER PUBLICATION supabase_realtime ADD TABLE public.entries;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.judges;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.scores;
-ALTER PUBLICATION supabase_realtime ADD TABLE public.settings;
+-- Enable Realtime for all tables safely
+DO $$
+BEGIN
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.entries;
+  EXCEPTION WHEN duplicate_object THEN
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.judges;
+  EXCEPTION WHEN duplicate_object THEN
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.scores;
+  EXCEPTION WHEN duplicate_object THEN
+  END;
+  BEGIN
+    ALTER PUBLICATION supabase_realtime ADD TABLE public.settings;
+  EXCEPTION WHEN duplicate_object THEN
+  END;
+END $$;
 
--- Enable RLS and permissive policies for event scoring
+-- Enable Row Level Security (RLS) with permissive access for event scoring
 ALTER TABLE public.entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.judges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Allow public read entries" ON public.entries FOR SELECT USING (true);
-CREATE POLICY "Allow public insert/update entries" ON public.entries FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all entries" ON public.entries;
+CREATE POLICY "Allow all entries" ON public.entries FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow public read judges" ON public.judges FOR SELECT USING (true);
-CREATE POLICY "Allow public insert/update judges" ON public.judges FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all judges" ON public.judges;
+CREATE POLICY "Allow all judges" ON public.judges FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow public read scores" ON public.scores FOR SELECT USING (true);
-CREATE POLICY "Allow public insert/update scores" ON public.scores FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all scores" ON public.scores;
+CREATE POLICY "Allow all scores" ON public.scores FOR ALL USING (true) WITH CHECK (true);
 
-CREATE POLICY "Allow public read settings" ON public.settings FOR SELECT USING (true);
-CREATE POLICY "Allow public insert/update settings" ON public.settings FOR ALL USING (true);
+DROP POLICY IF EXISTS "Allow all settings" ON public.settings;
+CREATE POLICY "Allow all settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);

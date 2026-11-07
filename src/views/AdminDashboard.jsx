@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   Shield, 
   KeyRound, 
@@ -21,7 +21,12 @@ import {
   AlertTriangle, 
   ExternalLink,
   Search,
-  MessageCircle
+  MessageCircle,
+  Edit3,
+  X,
+  Database,
+  CloudUpload,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   saveJudge, 
@@ -31,12 +36,87 @@ import {
   updateSettings,
   clearAllCompetitionData,
   saveScore,
-  replaceAllEntries
+  replaceAllEntries,
+  checkSupabaseHealth,
+  syncLocalDataToSupabase
 } from '../lib/db';
 import { parseGoogleFormExcel, assignAnonymousIds, renumberEntriesList } from '../utils/importer';
 import { DEMO_ENTRIES, DEMO_JUDGES, DEMO_SCORES } from '../utils/demoData';
 import EntryReviewModal from '../components/EntryReviewModal';
 import Leaderboard from './Leaderboard';
+
+const SUPABASE_SCHEMA_SQL = `-- DANCEJUDGE PRO (TAPE THE BEAT) - SUPABASE INITIALIZATION
+CREATE TABLE IF NOT EXISTS public.entries (
+  id TEXT PRIMARY KEY,
+  anonymous_id TEXT NOT NULL,
+  category TEXT NOT NULL,
+  display_name TEXT,
+  primary_reg_no TEXT,
+  primary_phone TEXT,
+  primary_email TEXT,
+  main_video TEXT,
+  video_links JSONB DEFAULT '[]'::jsonb,
+  performers JSONB DEFAULT '[]'::jsonb,
+  flags JSONB DEFAULT '[]'::jsonb,
+  is_flagged BOOLEAN DEFAULT FALSE,
+  is_duplicate BOOLEAN DEFAULT FALSE,
+  is_excluded BOOLEAN DEFAULT FALSE,
+  status TEXT DEFAULT 'pending',
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.judges (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  token TEXT UNIQUE NOT NULL,
+  active BOOLEAN DEFAULT TRUE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.scores (
+  id TEXT PRIMARY KEY,
+  judge_id TEXT NOT NULL,
+  entry_id TEXT NOT NULL,
+  total NUMERIC NOT NULL,
+  criteria_scores JSONB DEFAULT '{}'::jsonb,
+  comment TEXT DEFAULT '',
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.settings (
+  id TEXT PRIMARY KEY DEFAULT 'global',
+  locked_categories JSONB DEFAULT '{"SOLO": false, "DUO": false, "TRIO": false}'::jsonb,
+  names_visible BOOLEAN DEFAULT FALSE,
+  admin_pin TEXT DEFAULT '2026',
+  active_round_name TEXT DEFAULT 'Final Round 2026'
+);
+
+INSERT INTO public.settings (id, locked_categories, names_visible, admin_pin, active_round_name)
+VALUES ('global', '{"SOLO": false, "DUO": false, "TRIO": false}', false, '2026', 'Final Round 2026')
+ON CONFLICT (id) DO NOTHING;
+
+DO $$
+BEGIN
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.entries; EXCEPTION WHEN duplicate_object THEN END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.judges; EXCEPTION WHEN duplicate_object THEN END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.scores; EXCEPTION WHEN duplicate_object THEN END;
+  BEGIN ALTER PUBLICATION supabase_realtime ADD TABLE public.settings; EXCEPTION WHEN duplicate_object THEN END;
+END $$;
+
+ALTER TABLE public.entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.judges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Allow all entries" ON public.entries;
+CREATE POLICY "Allow all entries" ON public.entries FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all judges" ON public.judges;
+CREATE POLICY "Allow all judges" ON public.judges FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all scores" ON public.scores;
+CREATE POLICY "Allow all scores" ON public.scores FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Allow all settings" ON public.settings;
+CREATE POLICY "Allow all settings" ON public.settings FOR ALL USING (true) WITH CHECK (true);
+`;
 
 export default function AdminDashboard({
   entries = [],
@@ -61,6 +141,47 @@ export default function AdminDashboard({
   // New Judge creation
   const [newJudgeName, setNewJudgeName] = useState('');
   const [copiedToken, setCopiedToken] = useState(null);
+
+  // Judge edit state
+  const [editingJudgeId, setEditingJudgeId] = useState(null);
+  const [editingJudgeName, setEditingJudgeName] = useState('');
+
+  // Database health & cloud sync state
+  const [dbHealth, setDbHealth] = useState(null);
+  const [isCheckingDb, setIsCheckingDb] = useState(false);
+  const [isSyncingDb, setIsSyncingDb] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState('');
+
+  const runHealthCheck = async () => {
+    setIsCheckingDb(true);
+    const res = await checkSupabaseHealth();
+    setDbHealth(res);
+    setIsCheckingDb(false);
+  };
+
+  useEffect(() => {
+    runHealthCheck();
+  }, []);
+
+  const handleCopySql = () => {
+    navigator.clipboard.writeText(SUPABASE_SCHEMA_SQL);
+    setCopiedSql(true);
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
+  const handleSyncToCloud = async () => {
+    setIsSyncingDb(true);
+    setSyncStatusMsg('');
+    const res = await syncLocalDataToSupabase();
+    if (res.success) {
+      setSyncStatusMsg(`Synced ${res.counts.judges} judges, ${res.counts.entries} entries, and ${res.counts.scores} scores to cloud!`);
+      runHealthCheck();
+    } else {
+      setSyncStatusMsg(`Sync error: ${res.error || res.message}`);
+    }
+    setIsSyncingDb(false);
+  };
 
   // Search & Filters in Entries
   const [searchQuery, setSearchQuery] = useState('');
@@ -196,6 +317,18 @@ export default function AdminDashboard({
       const newToken = `judge-${Math.random().toString(36).substring(2, 6)}-${randomSuffix}`;
       await saveJudge({ ...judge, token: newToken });
     }
+  };
+
+  // Edit Judge Name
+  const handleStartEditJudge = (judge) => {
+    setEditingJudgeId(judge.id);
+    setEditingJudgeName(judge.name);
+  };
+
+  const handleSaveEditJudge = async (judge) => {
+    if (!editingJudgeName.trim()) return;
+    await saveJudge({ ...judge, name: editingJudgeName.trim() });
+    setEditingJudgeId(null);
   };
 
   // Toggle Judge Status (Revoke/Enable)
@@ -339,6 +472,81 @@ export default function AdminDashboard({
           </button>
         </div>
       </div>
+
+      {/* Cloud Database Status & Realtime Sync Banner */}
+      {dbHealth?.tablesMissing ? (
+        <div className="p-4 md:p-5 rounded-2xl bg-amber-950/30 border border-amber-500/40 text-amber-200 animate-in fade-in">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                <span className="font-bold text-sm tracking-wide text-white">
+                  Cloud Database Setup Required (10 Seconds)
+                </span>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold border border-amber-500/30">
+                  Phone Sync Pending
+                </span>
+              </div>
+              <p className="text-xs text-amber-200/80 leading-relaxed max-w-2xl">
+                Altered judges and entries are currently stored on this laptop only. For your phone and judges to see them, run the SQL schema once in your Supabase dashboard:
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={handleCopySql}
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500 hover:bg-amber-400 text-black flex items-center gap-1.5 transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)] min-h-[38px]"
+              >
+                {copiedSql ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                <span>{copiedSql ? 'SQL Copied!' : '1. Copy SQL Code'}</span>
+              </button>
+
+              <a
+                href="https://supabase.com/dashboard/project/lkhgccaokicgyfrsbhlt/sql/new"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-3.5 py-2 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/20 text-white flex items-center gap-1.5 border border-white/15 transition-all min-h-[38px]"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-amber-400" />
+                <span>2. Open Supabase SQL</span>
+              </a>
+
+              <button
+                type="button"
+                onClick={runHealthCheck}
+                disabled={isCheckingDb}
+                className="px-3 py-2 rounded-xl text-xs font-semibold bg-white/5 hover:bg-white/10 text-white flex items-center gap-1.5 border border-white/10 transition-all min-h-[38px]"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isCheckingDb ? 'animate-spin' : ''}`} />
+                <span>3. Check Connection</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : dbHealth?.connected ? (
+        <div className="p-3.5 px-4 rounded-xl bg-emerald-950/20 border border-emerald-500/30 text-emerald-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-xs">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span className="font-semibold text-white">Cloud Database Active:</span>
+            <span className="text-[#a3a3a3]">All judges, scores, and entries are synchronizing real-time with phones and judge portals.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            {syncStatusMsg && (
+              <span className="text-[11px] text-emerald-400 font-mono">{syncStatusMsg}</span>
+            )}
+            <button
+              type="button"
+              onClick={handleSyncToCloud}
+              disabled={isSyncingDb}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 transition-all min-h-[36px]"
+            >
+              <CloudUpload className={`w-3.5 h-3.5 ${isSyncingDb ? 'animate-spin' : ''}`} />
+              <span>{isSyncingDb ? 'Syncing...' : 'Push Laptop Data to Cloud'}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Navigation Tabs */}
       <div className="flex items-center gap-2 border-b border-white/10 pb-2 overflow-x-auto">
@@ -583,16 +791,56 @@ export default function AdminDashboard({
                   >
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="text-lg font-bold text-white tracking-wide">
-                            {j.name}
-                          </h4>
-                          {!j.active && (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/50 text-red-300 border border-red-500/30">
-                              REVOKED
-                            </span>
-                          )}
-                        </div>
+                        {editingJudgeId === j.id ? (
+                          <div className="flex items-center gap-1.5 mb-1">
+                            <input
+                              type="text"
+                              value={editingJudgeName}
+                              onChange={(e) => setEditingJudgeName(e.target.value)}
+                              className="glass-input px-2.5 py-1 text-sm font-bold text-white w-44"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveEditJudge(j);
+                                if (e.key === 'Escape') setEditingJudgeId(null);
+                              }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleSaveEditJudge(j)}
+                              className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white min-h-[32px] min-w-[32px] flex items-center justify-center"
+                              title="Save Name"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingJudgeId(null)}
+                              className="p-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-[#a3a3a3] min-h-[32px] min-w-[32px] flex items-center justify-center"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <h4 className="text-lg font-bold text-white tracking-wide">
+                              {j.name}
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEditJudge(j)}
+                              className="p-1 rounded text-[#a3a3a3] hover:text-white transition-colors"
+                              title="Edit judge name"
+                            >
+                              <Edit3 className="w-3.5 h-3.5" />
+                            </button>
+                            {!j.active && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-900/50 text-red-300 border border-red-500/30">
+                                REVOKED
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <p className="text-xs text-[#a3a3a3] mt-0.5">
                           Progress: <span className="font-semibold text-white">{judgeScores.length}</span> of {activeEntriesCount} scored ({percentDone}%)
                         </p>
