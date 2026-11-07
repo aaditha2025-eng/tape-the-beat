@@ -1,7 +1,10 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background-color: #0a0a0a; color: #fafafa; min-height: 100%;">
   <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%23dc2626'><path d='M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z'/></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>DanceJudge Pro | Competition Scoring Portal</title>
@@ -10,8 +13,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@300;400;500;600;700;800&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Global Early Error Handler for Mobile Devices -->
+    <script>
+      window.addEventListener('error', function(e) {
+        var banner = document.getElementById('critical-error-banner');
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.id = 'critical-error-banner';
+          banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#450a0a;color:#fca5a5;padding:16px;z-index:999999;font-family:-apple-system,BlinkMacSystemFont,sans-serif;font-size:12px;border-bottom:2px solid #ef4444;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,0.8);';
+          banner.innerHTML = '<strong style="color:#fff;font-size:14px;display:block;margin-bottom:4px;">App Initialization Notice</strong>' +
+            '<span style="word-break:break-all;">' + (e.message || 'Script load failure') + '</span><br>' +
+            '<button onclick="localStorage.clear();location.reload(true)" style="margin-top:10px;padding:8px 16px;background:#dc2626;color:#fff;border:none;border-radius:8px;font-weight:bold;cursor:pointer;">Clear Cache & Reload</button>';
+          document.body ? document.body.appendChild(banner) : document.documentElement.appendChild(banner);
+        }
+      });
+    </script>
   </head>
-  <body class="bg-[#0a0a0a] text-[#fafafa] min-h-screen selection:bg-red-600 selection:text-white antialiased">
+  <body style="background-color: #0a0a0a; color: #fafafa; margin: 0; min-height: 100vh;" class="bg-[#0a0a0a] text-[#fafafa] min-h-screen selection:bg-red-600 selection:text-white antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
