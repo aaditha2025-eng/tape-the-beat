@@ -31,7 +31,7 @@ export default function App() {
   const [currentJudgeToken, setCurrentJudgeToken] = useState(null);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [initialLoaded, setInitialLoaded] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(true);
 
   // Network connectivity listener
   useEffect(() => {
@@ -98,55 +98,6 @@ export default function App() {
     window.addEventListener('popstate', parseUrlToken);
     return () => window.removeEventListener('popstate', parseUrlToken);
   }, []);
-
-  // Auto-seed demo data if fresh empty start
-  useEffect(() => {
-    if (initialLoaded && entries.length === 0 && judges.length === 0) {
-      // Auto-load demo data so user immediately sees a working app
-      const autoSeed = async () => {
-        try {
-          await saveEntriesBatch(DEMO_ENTRIES);
-          for (const j of DEMO_JUDGES) {
-            await saveJudge(j);
-          }
-          for (const s of DEMO_SCORES) {
-            await saveScore(s.judgeId, s.entryId, s);
-          }
-        } catch (e) {
-          console.error('Auto seed error:', e);
-        }
-      };
-      autoSeed();
-    }
-  }, [initialLoaded, entries.length, judges.length]);
-
-  // Automatically ensure database numbering starts strictly from 01 (S-01, D-01, T-01)
-  useEffect(() => {
-    if (!initialLoaded || entries.length === 0) return;
-
-    const categories = ['SOLO', 'DUO', 'TRIO'];
-    let needsFix = false;
-
-    for (const cat of categories) {
-      const catEntries = entries.filter((e) => (e.category || 'SOLO').toUpperCase() === cat && !e.isExcluded);
-      if (catEntries.length > 0) {
-        const nums = catEntries
-          .map((e) => parseInt((e.anonymousId || '').replace(/^[SDT]-/, ''), 10))
-          .filter((n) => !isNaN(n))
-          .sort((a, b) => a - b);
-
-        if (nums.length > 0 && nums[0] !== 1) {
-          needsFix = true;
-          break;
-        }
-      }
-    }
-
-    if (needsFix) {
-      const { renumbered, idMap } = renumberEntriesList(entries);
-      replaceAllEntries(renumbered, idMap);
-    }
-  }, [initialLoaded, entries]);
 
   // Find active judge by token
   const activeJudge = judges.find((j) => j.token === currentJudgeToken);

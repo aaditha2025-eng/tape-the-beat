@@ -208,28 +208,19 @@ export async function syncLocalDataToSupabase() {
 }
 
 export function subscribeEntries(callback) {
-  // Always register local callback for instant optimistic UI updates
   listeners.entries.add(callback);
 
   if (supabase) {
-    // Initial fetch from Supabase
     supabase.from('entries').select('*').then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         callback(data.map(mapEntryFromDb));
       } else {
-        // Fall back to local data if table missing or empty while local has items
-        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {}));
-        callback(local);
-        // If local has items and Supabase table exists, sync up
-        if (!error && local.length > 0 && (!data || data.length === 0)) {
-          supabase.from('entries').upsert(local.map(mapEntryToDb)).catch(console.error);
-        }
+        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {})));
       }
     }).catch(() => {
       callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {})));
     });
 
-    // Realtime channel
     const channel = supabase
       .channel('public:entries')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'entries' }, () => {
@@ -245,27 +236,20 @@ export function subscribeEntries(callback) {
     };
   }
 
-  // Local fallback
   const current = Object.values(getLocalData(LOCAL_STORAGE_KEYS.ENTRIES, {}));
   callback(current);
   return () => listeners.entries.delete(callback);
 }
 
 export function subscribeJudges(callback) {
-  // Always register local callback for instant optimistic UI updates
   listeners.judges.add(callback);
 
   if (supabase) {
     supabase.from('judges').select('*').then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         callback(data);
       } else {
-        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {}));
-        callback(local);
-        // If local has items and Supabase table exists, auto-sync
-        if (!error && local.length > 0 && (!data || data.length === 0)) {
-          supabase.from('judges').upsert(local).catch(console.error);
-        }
+        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {})));
       }
     }).catch(() => {
       callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.JUDGES, {})));
@@ -296,14 +280,10 @@ export function subscribeScores(callback) {
 
   if (supabase) {
     supabase.from('scores').select('*').then(({ data, error }) => {
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         callback(data.map(mapScoreFromDb));
       } else {
-        const local = Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {}));
-        callback(local);
-        if (!error && local.length > 0 && (!data || data.length === 0)) {
-          supabase.from('scores').upsert(local.map(mapScoreToDb)).catch(console.error);
-        }
+        callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {})));
       }
     }).catch(() => {
       callback(Object.values(getLocalData(LOCAL_STORAGE_KEYS.SCORES, {})));
