@@ -1,6 +1,6 @@
 import React from 'react';
 import { Trophy, Shield, UserCheck, Flame, Wifi, WifiOff } from 'lucide-react';
-import { isFirebaseConfigured } from '../lib/firebase';
+import { isSupabaseConfigured } from '../lib/db';
 
 export default function Navbar({
   currentView,
@@ -67,10 +67,10 @@ export default function Navbar({
               <WifiOff className="w-3.5 h-3.5" />
               <span className="hidden md:inline font-medium">Offline Mode</span>
             </div>
-          ) : isFirebaseConfigured ? (
-            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs" title="Live Firebase Firestore">
+          ) : isSupabaseConfigured ? (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-950/40 border border-emerald-500/30 text-emerald-300 text-xs" title="Live Supabase Cloud Database">
               <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="hidden md:inline font-medium">Firestore Live</span>
+              <span className="hidden md:inline font-medium">Supabase Live</span>
             </div>
           ) : (
             <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-neutral-800/80 border border-white/10 text-[#a3a3a3] text-xs" title="Local Storage Realtime Mode">

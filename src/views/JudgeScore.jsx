@@ -18,7 +18,7 @@ import {
   getMaxScoreForCategory, 
   JUDGING_CONFIG 
 } from '../config/criteria';
-import { saveScore } from '../lib/firebase';
+import { saveScore } from '../lib/db';
 
 export default function JudgeScore({
   entry,

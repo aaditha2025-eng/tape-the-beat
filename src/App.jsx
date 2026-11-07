@@ -13,7 +13,7 @@ import {
   saveJudge,
   saveScore,
   replaceAllEntries
-} from './lib/firebase';
+} from './lib/db';
 import { renumberEntriesList } from './utils/importer';
 import { DEMO_ENTRIES, DEMO_JUDGES, DEMO_SCORES } from './utils/demoData';
 
